@@ -1,20 +1,6 @@
 <?php
-// Әзірге бөлмелер массивте сақталады.
-// 11-аптада бұл деректер MySQL-дегі rooms кестесінен алынады.
-$rooms = [
-    ["id" => 1, "dorm" => "№1 жатақхана", "number" => "101", "floor" => 1, "capacity" => 2, "free" => 1, "price" => 25000,
-     "description" => "Екі орындық бөлме, жеке жуынатын бөлмесі бар"],
-    ["id" => 2, "dorm" => "№1 жатақхана", "number" => "205", "floor" => 2, "capacity" => 3, "free" => 2, "price" => 20000,
-     "description" => "Үш орындық бөлме, терезесі оңтүстікке қарайды"],
-    ["id" => 3, "dorm" => "№2 жатақхана", "number" => "312", "floor" => 3, "capacity" => 4, "free" => 0, "price" => 18000,
-     "description" => "Төрт орындық бөлме"],
-    ["id" => 4, "dorm" => "№2 жатақхана", "number" => "118", "floor" => 1, "capacity" => 2, "free" => 2, "price" => 27000,
-     "description" => "Екі орындық, жөндеуден кейін"],
-    ["id" => 5, "dorm" => "№3 жатақхана", "number" => "407", "floor" => 4, "capacity" => 3, "free" => 1, "price" => 21000,
-     "description" => "Үш орындық бөлме, оқу үстелдері бар"],
-    ["id" => 6, "dorm" => "№3 жатақхана", "number" => "220", "floor" => 2, "capacity" => 4, "free" => 3, "price" => 17000,
-     "description" => "Төрт орындық бөлме"]
-];
+session_start();
+require_once "db.php";
 
 $message = "";
 $messageType = "error";
@@ -25,42 +11,59 @@ function isValidDate($date) {
     return $d && $d->format("Y-m-d") === $date;
 }
 
-// ---------- 1. Брондау формасын серверде өңдеу ($_POST) ----------
+// ---------- 1. Брондау формасын өңдеу ($_POST) ----------
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    // Брондау тек жүйеге кірген пайдаланушыға рұқсат етіледі
+    if (!isset($_SESSION["user_id"])) {
+        header("Location: login.php?need_login=1");
+        exit;
+    }
+
     $roomId = (int) ($_POST["room_id"] ?? 0);
-    $name = trim($_POST["client_name"] ?? "");
-    $phone = trim($_POST["client_phone"] ?? "");
     $startDate = $_POST["start_date"] ?? "";
     $endDate = $_POST["end_date"] ?? "";
     $today = date("Y-m-d");
 
-    // Таңдалған бөлмені массивтен табу
-    $selectedRoom = null;
-    foreach ($rooms as $r) {
-        if ($r["id"] === $roomId) {
-            $selectedRoom = $r;
-        }
-    }
-
-    if ($name === "" || $phone === "" || $startDate === "" || $endDate === "") {
+    if ($roomId <= 0 || $startDate === "" || $endDate === "") {
         $message = "Барлық өрісті толтырыңыз.";
-    } elseif ($selectedRoom === null) {
-        $message = "Бөлме табылмады.";
-    } elseif ($selectedRoom["free"] <= 0) {
-        $message = "Бұл бөлмеде бос орын жоқ.";
-    } elseif (!preg_match('/^\+?7[0-9]{10}$/', $phone)) {
-        $message = "Телефон нөмірін +77001234567 форматында енгізіңіз.";
     } elseif (!isValidDate($startDate) || !isValidDate($endDate)) {
         $message = "Күнді дұрыс форматта енгізіңіз.";
     } elseif ($startDate < $today) {
-        $message = "Кіру күні бүгінгі күннен ерте болмауы керек.";
+        $message = "Басталу күні бүгінгі күннен ерте болмауы керек.";
     } elseif ($endDate <= $startDate) {
-        $message = "Шығу күні кіру күнінен кейін болуы керек.";
+        $message = "Аяқталу күні басталу күнінен кейін болуы керек.";
     } else {
-        $messageType = "success";
-        $message = "Құрметті " . $name . ", " . $selectedRoom["dorm"] . " №" . $selectedRoom["number"]
-                 . " бөлмесіне өтініміңіз қабылданды! Жақын арада " . $phone
-                 . " нөмірі арқылы хабарласамыз.";
+        $stmt = $pdo->prepare("SELECT room_number, free_places FROM rooms WHERE id = ?");
+        $stmt->execute([$roomId]);
+        $room = $stmt->fetch();
+
+        if (!$room) {
+            $message = "Бөлме табылмады.";
+        } elseif ($room["free_places"] <= 0) {
+            $message = "Бұл бөлмеде бос орын жоқ.";
+        } else {
+            // Бір бөлмеге екі рет өтінім жібермеу үшін тексеру
+            $check = $pdo->prepare(
+                "SELECT COUNT(*) FROM bookings
+                 WHERE user_id = ? AND room_id = ? AND status IN ('pending', 'approved')"
+            );
+            $check->execute([$_SESSION["user_id"], $roomId]);
+
+            if ($check->fetchColumn() > 0) {
+                $message = "Сіз бұл бөлмеге өтінім жіберіп қойғансыз.";
+            } else {
+                $insert = $pdo->prepare(
+                    "INSERT INTO bookings (user_id, room_id, start_date, end_date)
+                     VALUES (?, ?, ?, ?)"
+                );
+                $insert->execute([$_SESSION["user_id"], $roomId, $startDate, $endDate]);
+
+                $messageType = "success";
+                $message = "№" . $room["room_number"] . " бөлмесіне өтінім жіберілді! "
+                         . "Мәртебесін жеке кабинеттен көре аласыз.";
+            }
+        }
     }
 }
 
@@ -69,20 +72,34 @@ $search = trim($_GET["search"] ?? "");
 $type = $_GET["type"] ?? "";
 $freeOnly = isset($_GET["free"]);
 
-$filteredRooms = [];
+$sql = "SELECT r.*, d.name AS dorm_name
+        FROM rooms r
+        JOIN dormitories d ON d.id = r.dormitory_id
+        WHERE 1 = 1";
+$params = [];
 
-foreach ($rooms as $room) {
-    $text = $room["dorm"] . " " . $room["number"];
-
-    $matchesText = $search === "" || mb_stripos($text, $search, 0, "UTF-8") !== false;
-    $matchesType = $type === "" || (string) $room["capacity"] === $type;
-    $matchesFree = !$freeOnly || $room["free"] > 0;
-
-    if ($matchesText && $matchesType && $matchesFree) {
-        $filteredRooms[] = $room;
-    }
+if ($search !== "") {
+    $sql .= " AND (d.name LIKE ? OR r.room_number LIKE ?)";
+    $params[] = "%" . $search . "%";
+    $params[] = "%" . $search . "%";
 }
 
+if (in_array($type, ["2", "3", "4"], true)) {
+    $sql .= " AND r.capacity = ?";
+    $params[] = (int) $type;
+}
+
+if ($freeOnly) {
+    $sql .= " AND r.free_places > 0";
+}
+
+$sql .= " ORDER BY d.name, r.room_number";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$rooms = $stmt->fetchAll();
+
+$isLoggedIn = isset($_SESSION["user_id"]);
 $today = date("Y-m-d");
 
 $pageTitle = "Бөлмелер | DormBook";
@@ -128,50 +145,47 @@ include "header.php";
     <?php if ($message !== ""): ?>
         <div class="message <?= $messageType ?>">
             <?= htmlspecialchars($message, ENT_QUOTES, "UTF-8") ?>
+            <?php if ($messageType === "success"): ?>
+                <a href="profile.php">Кабинетке өту →</a>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
-    <p class="result-count">Табылған бөлмелер: <b><?= count($filteredRooms) ?></b></p>
+    <p class="result-count">Табылған бөлмелер: <b><?= count($rooms) ?></b></p>
 
     <div class="rooms-grid">
-        <?php foreach ($filteredRooms as $room): ?>
+        <?php foreach ($rooms as $room): ?>
             <article class="room-card">
                 <div class="room-top">
-                    <span class="room-number">№<?= htmlspecialchars($room["number"]) ?></span>
-                    <span class="room-type"><?= $room["capacity"] ?> орындық</span>
+                    <span class="room-number">№<?= htmlspecialchars($room["room_number"]) ?></span>
+                    <span class="room-type"><?= (int) $room["capacity"] ?> орындық</span>
                 </div>
 
                 <div class="room-info">
-                    <h3><?= htmlspecialchars($room["dorm"]) ?></h3>
+                    <h3><?= htmlspecialchars($room["dorm_name"]) ?></h3>
 
-                    <p class="room-meta"><?= $room["floor"] ?>-қабат</p>
-                    <p class="room-desc"><?= htmlspecialchars($room["description"]) ?></p>
+                    <p class="room-meta"><?= (int) $room["floor"] ?>-қабат</p>
+                    <p class="room-desc"><?= htmlspecialchars($room["description"] ?? "") ?></p>
 
-                    <?php if ($room["free"] > 0): ?>
-                        <p class="status free">Бос орын: <?= $room["free"] ?></p>
+                    <?php if ($room["free_places"] > 0): ?>
+                        <p class="status free">Бос орын: <?= (int) $room["free_places"] ?></p>
                     <?php else: ?>
                         <p class="status busy">Бос орын жоқ</p>
                     <?php endif; ?>
 
                     <p class="price">
-                        <?= number_format($room["price"], 0, ".", " ") ?> ₸ / ай
+                        <?= number_format($room["price_per_month"], 0, ".", " ") ?> ₸ / ай
                     </p>
 
-                    <?php if ($room["free"] <= 0): ?>
+                    <?php if ($room["free_places"] <= 0): ?>
                         <button class="book-btn" disabled>Брондау мүмкін емес</button>
+
+                    <?php elseif (!$isLoggedIn): ?>
+                        <a href="login.php?need_login=1" class="book-btn">Брондау үшін кіріңіз</a>
+
                     <?php else: ?>
                         <form method="POST" action="rooms.php" class="booking-form">
-                            <input type="hidden" name="room_id" value="<?= $room["id"] ?>">
-
-                            <label class="field">
-                                Аты-жөніңіз
-                                <input type="text" name="client_name" placeholder="Атыңыз" required>
-                            </label>
-
-                            <label class="field">
-                                Телефон
-                                <input type="tel" name="client_phone" placeholder="+77001234567" required>
-                            </label>
+                            <input type="hidden" name="room_id" value="<?= (int) $room["id"] ?>">
 
                             <div class="date-row">
                                 <label>
@@ -193,10 +207,8 @@ include "header.php";
         <?php endforeach; ?>
     </div>
 
-    <?php if (count($filteredRooms) === 0): ?>
-        <p class="empty-message">
-            «<?= htmlspecialchars($search, ENT_QUOTES, "UTF-8") ?>» бойынша бөлме табылмады.
-        </p>
+    <?php if (count($rooms) === 0): ?>
+        <p class="empty-message">Іздеу бойынша бөлме табылмады.</p>
     <?php endif; ?>
 </section>
 

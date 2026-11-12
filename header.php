@@ -1,8 +1,13 @@
 <?php
 // Әр беттің жоғарғы бөлігі: <head>, логотип және мәзір.
 // Қолдану: $pageTitle = "..."; include "header.php";
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 $pageTitle = $pageTitle ?? "DormBook — Жатақхана бөлмелерін брондау";
 $currentPage = basename($_SERVER["PHP_SELF"]);
+$isLoggedIn = isset($_SESSION["user_id"]);
 
 // Ағымдағы бетті мәзірде белгілеу
 function activeClass($page, $currentPage) {
@@ -27,8 +32,16 @@ function activeClass($page, $currentPage) {
     <nav id="nav">
         <a href="index.php"<?= activeClass("index.php", $currentPage) ?>>Басты бет</a>
         <a href="rooms.php"<?= activeClass("rooms.php", $currentPage) ?>>Бөлмелер</a>
-        <a href="login.php"<?= activeClass("login.php", $currentPage) ?>>Кіру</a>
-        <a href="register.php" class="main-btn small">Тіркелу</a>
+
+        <?php if ($isLoggedIn): ?>
+            <a href="profile.php"<?= activeClass("profile.php", $currentPage) ?>>
+                👤 <?= htmlspecialchars($_SESSION["user_name"], ENT_QUOTES, "UTF-8") ?>
+            </a>
+            <a href="logout.php" class="main-btn small">Шығу</a>
+        <?php else: ?>
+            <a href="login.php"<?= activeClass("login.php", $currentPage) ?>>Кіру</a>
+            <a href="register.php" class="main-btn small">Тіркелу</a>
+        <?php endif; ?>
     </nav>
 </header>
 
