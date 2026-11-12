@@ -1,7 +1,10 @@
 -- DormBook — Жатақхана бөлмелерін брондау жүйесі
 -- Дерекқор мен кестелерді құру скрипті (phpMyAdmin → Import арқылы жүктеледі)
+-- Ескерту: скрипт ескі dormbook дерекқорын өшіріп, қайта құрады.
 
-CREATE DATABASE IF NOT EXISTS dormbook
+DROP DATABASE IF EXISTS dormbook;
+
+CREATE DATABASE dormbook
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
@@ -37,6 +40,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     free_places INT NOT NULL,
     price_per_month DECIMAL(10, 2) NOT NULL,
     description TEXT,
+    UNIQUE (dormitory_id, room_number),
     FOREIGN KEY (dormitory_id) REFERENCES dormitories(id) ON DELETE CASCADE
 );
 
@@ -71,3 +75,8 @@ INSERT INTO rooms (dormitory_id, room_number, floor, capacity, free_places, pric
 INSERT INTO users (full_name, email, student_id, phone, password_hash, role) VALUES
 ('Тест Студент', 'test@dormbook.kz', '22010001', '+77001112233',
  '$2y$10$oqimcsOWo9oTPzgv308XMei2EfWZssDALZ0UEyOR534f6aAmP9VL6', 'student');
+
+-- Әкімші аккаунты (email: admin@dormbook.kz, құпиясөз: admin12345)
+INSERT INTO users (full_name, email, student_id, phone, password_hash, role) VALUES
+('Әкімші', 'admin@dormbook.kz', '00000001', '+77000000000',
+ '$2y$10$QuzRj5WxrhJJPRHMpxBlZ.1esZWuTAoepyQlJTj/G7cDMlMmlaJdO', 'admin');

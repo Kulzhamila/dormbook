@@ -33,6 +33,10 @@ function activeClass($page, $currentPage) {
         <a href="index.php"<?= activeClass("index.php", $currentPage) ?>>Басты бет</a>
         <a href="rooms.php"<?= activeClass("rooms.php", $currentPage) ?>>Бөлмелер</a>
 
+        <?php if ($isLoggedIn && ($_SESSION["user_role"] ?? "") === "admin"): ?>
+            <a href="admin_rooms.php"<?= strpos($currentPage, "admin") === 0 ? ' class="active"' : '' ?>>⚙ Әкімші панелі</a>
+        <?php endif; ?>
+
         <?php if ($isLoggedIn): ?>
             <a href="profile.php"<?= activeClass("profile.php", $currentPage) ?>>
                 👤 <?= htmlspecialchars($_SESSION["user_name"], ENT_QUOTES, "UTF-8") ?>

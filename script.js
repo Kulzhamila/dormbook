@@ -83,6 +83,15 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    // 6. Әкімші: жоюдан бұрын растау сұрау
+    document.querySelectorAll(".delete-form").forEach(function (form) {
+        form.addEventListener("submit", function (e) {
+            if (!confirm(form.dataset.confirm || "Өшіруді растайсыз ба?")) {
+                e.preventDefault();
+            }
+        });
+    });
+
     // 5. Кіру формасы (9-апта, статикалық): email мен құпиясөзді тексеру
     const staticLogin = document.getElementById("staticLoginForm");
 
