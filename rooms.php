@@ -67,37 +67,81 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-// ---------- 2. Іздеу және сүзгілеу ($_GET) ----------
+// ---------- 2. Іздеу, сүзгілеу, сұрыптау және пагинация ($_GET) ----------
+include "pagination.php";
+
 $search = trim($_GET["search"] ?? "");
 $type = $_GET["type"] ?? "";
+$dormId = (int) ($_GET["dorm"] ?? 0);
 $freeOnly = isset($_GET["free"]);
+$sort = $_GET["sort"] ?? "number";
 
-$sql = "SELECT r.*, d.name AS dorm_name
-        FROM rooms r
-        JOIN dormitories d ON d.id = r.dormitory_id
-        WHERE 1 = 1";
+// Сұрыптау түрлері: тек осы тізімдегі мәндерге рұқсат (SQL-инъекциядан қорғау)
+$sortOptions = [
+    "number"     => ["Жатақхана, нөмір",   "d.name, r.room_number"],
+    "price_asc"  => ["Арзанынан бастап",   "r.price_per_month ASC, r.id"],
+    "price_desc" => ["Қымбатынан бастап",  "r.price_per_month DESC, r.id"],
+    "free_desc"  => ["Бос орны көбінен",   "r.free_places DESC, r.id"]
+];
+if (!isset($sortOptions[$sort])) {
+    $sort = "number";
+}
+
+$dorms = $pdo->query("SELECT id, name FROM dormitories ORDER BY name")->fetchAll();
+
+// WHERE шарттарын жинау
+$where = " WHERE 1 = 1";
 $params = [];
 
 if ($search !== "") {
-    $sql .= " AND (d.name LIKE ? OR r.room_number LIKE ?)";
+    $where .= " AND (d.name LIKE ? OR r.room_number LIKE ?)";
     $params[] = "%" . $search . "%";
     $params[] = "%" . $search . "%";
 }
 
 if (in_array($type, ["2", "3", "4"], true)) {
-    $sql .= " AND r.capacity = ?";
+    $where .= " AND r.capacity = ?";
     $params[] = (int) $type;
 }
 
-if ($freeOnly) {
-    $sql .= " AND r.free_places > 0";
+if ($dormId > 0) {
+    $where .= " AND r.dormitory_id = ?";
+    $params[] = $dormId;
 }
 
-$sql .= " ORDER BY d.name, r.room_number";
+if ($freeOnly) {
+    $where .= " AND r.free_places > 0";
+}
+
+$from = " FROM rooms r JOIN dormitories d ON d.id = r.dormitory_id";
+
+// Барлығы қанша бөлме табылды?
+$countStmt = $pdo->prepare("SELECT COUNT(*)" . $from . $where);
+$countStmt->execute($params);
+$totalRooms = (int) $countStmt->fetchColumn();
+
+// Пагинация: бір бетте 6 бөлме
+$perPage = 6;
+$totalPages = max(1, (int) ceil($totalRooms / $perPage));
+$page = min(max(1, (int) ($_GET["page"] ?? 1)), $totalPages);
+$offset = ($page - 1) * $perPage;
+
+$sql = "SELECT r.*, d.name AS dorm_name" . $from . $where
+     . " ORDER BY " . $sortOptions[$sort][1]
+     . " LIMIT " . $perPage . " OFFSET " . $offset;   // екеуі де бүтін сан (int)
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $rooms = $stmt->fetchAll();
+
+// Сүзгілерді пагинация сілтемелерінде сақтау
+$filters = array_filter([
+    "search" => $search,
+    "type"   => $type,
+    "dorm"   => $dormId ?: "",
+    "free"   => $freeOnly ? "1" : "",
+    "sort"   => $sort === "number" ? "" : $sort
+], fn($v) => $v !== "");
 
 $isLoggedIn = isset($_SESSION["user_id"]);
 $today = date("Y-m-d");
@@ -127,6 +171,23 @@ include "header.php";
             <?php endforeach; ?>
         </select>
 
+        <select name="dorm">
+            <option value="">Барлық жатақхана</option>
+            <?php foreach ($dorms as $d): ?>
+                <option value="<?= (int) $d["id"] ?>" <?= $dormId === (int) $d["id"] ? "selected" : "" ?>>
+                    <?= htmlspecialchars($d["name"]) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+
+        <select name="sort">
+            <?php foreach ($sortOptions as $key => $opt): ?>
+                <option value="<?= $key ?>" <?= $sort === $key ? "selected" : "" ?>>
+                    Сұрыптау: <?= $opt[0] ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+
         <label class="checkbox">
             <input type="checkbox" name="free" value="1" <?= $freeOnly ? "checked" : "" ?>>
             Тек бос орны барлар
@@ -134,7 +195,7 @@ include "header.php";
 
         <button type="submit">Іздеу</button>
 
-        <?php if ($search !== "" || $type !== "" || $freeOnly): ?>
+        <?php if (count($filters) > 0): ?>
             <a href="rooms.php" class="reset-link">Тазалау</a>
         <?php endif; ?>
     </form>
@@ -151,7 +212,10 @@ include "header.php";
         </div>
     <?php endif; ?>
 
-    <p class="result-count">Табылған бөлмелер: <b><?= count($rooms) ?></b></p>
+    <p class="result-count">
+        Табылған бөлмелер: <b><?= $totalRooms ?></b>
+        <?php if ($totalPages > 1): ?> · <?= $page ?>/<?= $totalPages ?>-бет<?php endif; ?>
+    </p>
 
     <div class="rooms-grid">
         <?php foreach ($rooms as $room): ?>
@@ -184,7 +248,7 @@ include "header.php";
                         <a href="login.php?need_login=1" class="book-btn">Брондау үшін кіріңіз</a>
 
                     <?php else: ?>
-                        <form method="POST" action="rooms.php" class="booking-form">
+                        <form method="POST" action="rooms.php<?= htmlspecialchars(pageUrl($page, $filters)) ?>" class="booking-form">
                             <input type="hidden" name="room_id" value="<?= (int) $room["id"] ?>">
 
                             <div class="date-row">
@@ -210,6 +274,8 @@ include "header.php";
     <?php if (count($rooms) === 0): ?>
         <p class="empty-message">Іздеу бойынша бөлме табылмады.</p>
     <?php endif; ?>
+
+    <?php renderPagination($page, $totalPages, $filters); ?>
 </section>
 
 <?php include "footer.php"; ?>
