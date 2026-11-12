@@ -1,27 +1,8 @@
-<!DOCTYPE html>
-<html lang="kk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DormBook — Жатақхана бөлмелерін брондау</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+<?php
+$pageTitle = "DormBook — Жатақхана бөлмелерін брондау";
+include "header.php";
+?>
 
-<header class="header">
-    <a href="index.php" class="logo">Dorm<span>Book</span></a>
-
-    <button class="burger" id="burger" aria-label="Мәзірді ашу">☰</button>
-
-    <nav id="nav">
-        <a href="index.php" class="active">Басты бет</a>
-        <a href="rooms.php">Бөлмелер</a>
-        <a href="login.php">Кіру</a>
-        <a href="login.php" class="main-btn small">Тіркелу</a>
-    </nav>
-</header>
-
-<main>
 <section class="hero">
     <div class="hero-content">
         <p class="subtitle">СТУДЕНТТЕРГЕ АРНАЛҒАН ЖҮЙЕ</p>
@@ -79,13 +60,5 @@
         </div>
     </div>
 </section>
-</main>
 
-<footer class="footer">
-    <a href="index.php" class="logo">Dorm<span>Book</span></a>
-    <p>© 2026 DormBook. Жатақхана бөлмелерін брондау жүйесі. Оқу жобасы.</p>
-</footer>
-
-<script src="script.js"></script>
-</body>
-</html>
+<?php include "footer.php"; ?>

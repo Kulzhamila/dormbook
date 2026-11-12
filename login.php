@@ -1,27 +1,28 @@
-<!DOCTYPE html>
-<html lang="kk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Жүйеге кіру | DormBook</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+<?php
+$message = "";
+$success = false;
 
-<header class="header">
-    <a href="index.php" class="logo">Dorm<span>Book</span></a>
+// Кіру формасын серверде тексеру ($_POST)
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $email = trim($_POST["email"] ?? "");
+    $password = $_POST["password"] ?? "";
 
-    <button class="burger" id="burger" aria-label="Мәзірді ашу">☰</button>
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = "Email мекенжайын дұрыс енгізіңіз.";
+    } elseif ($password === "") {
+        $message = "Құпиясөзді енгізіңіз.";
+    } else {
+        // 11-аптада: users кестесінен email бойынша іздеп,
+        // password_verify() арқылы тексеріп, сессия ашамыз.
+        $success = true;
+        $message = "Форма дұрыс толтырылды. Аккаунтты тексеру 11-аптада дерекқор арқылы қосылады.";
+    }
+}
 
-    <nav id="nav">
-        <a href="index.php">Басты бет</a>
-        <a href="rooms.php">Бөлмелер</a>
-        <a href="login.php" class="active">Кіру</a>
-        <a href="login.php" class="main-btn small">Тіркелу</a>
-    </nav>
-</header>
+$pageTitle = "Жүйеге кіру | DormBook";
+include "header.php";
+?>
 
-<main>
 <div class="form-container">
     <h1>Жүйеге кіру</h1>
 
@@ -29,30 +30,39 @@
         Бөлме брондау үшін email мен құпиясөзіңізді енгізіңіз.
     </p>
 
-    <!-- Әзірге форма JavaScript арқылы тексеріледі (script.js) -->
-    <form id="staticLoginForm">
+    <?php if ($message !== ""): ?>
+        <div class="message <?= $success ? "success" : "error" ?>">
+            <?= htmlspecialchars($message, ENT_QUOTES, "UTF-8") ?>
+        </div>
+    <?php endif; ?>
+
+    <form method="POST" action="login.php">
         <label for="email">Email</label>
-        <input type="email" id="email" name="email" placeholder="name@example.com" required>
+        <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="name@example.com"
+            value="<?= htmlspecialchars($_POST["email"] ?? "", ENT_QUOTES, "UTF-8") ?>"
+            required
+        >
 
         <label for="password">Құпиясөз</label>
-        <input type="password" id="password" name="password" placeholder="Құпиясөзіңіз" required>
+        <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Құпиясөзіңіз"
+            required
+        >
 
-        <p class="form-error" hidden></p>
         <button type="submit">Кіру</button>
     </form>
 
     <p class="bottom">
         Аккаунтыңыз жоқ па?
-        <a href="login.php">Тіркелу</a>
+        <a href="register.php">Тіркелу</a>
     </p>
 </div>
-</main>
 
-<footer class="footer">
-    <a href="index.php" class="logo">Dorm<span>Book</span></a>
-    <p>© 2026 DormBook. Жатақхана бөлмелерін брондау жүйесі. Оқу жобасы.</p>
-</footer>
-
-<script src="script.js"></script>
-</body>
-</html>
+<?php include "footer.php"; ?>

@@ -1,27 +1,94 @@
-<!DOCTYPE html>
-<html lang="kk">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Бөлмелер | DormBook</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+<?php
+// Әзірге бөлмелер массивте сақталады.
+// 11-аптада бұл деректер MySQL-дегі rooms кестесінен алынады.
+$rooms = [
+    ["id" => 1, "dorm" => "№1 жатақхана", "number" => "101", "floor" => 1, "capacity" => 2, "free" => 1, "price" => 25000,
+     "description" => "Екі орындық бөлме, жеке жуынатын бөлмесі бар"],
+    ["id" => 2, "dorm" => "№1 жатақхана", "number" => "205", "floor" => 2, "capacity" => 3, "free" => 2, "price" => 20000,
+     "description" => "Үш орындық бөлме, терезесі оңтүстікке қарайды"],
+    ["id" => 3, "dorm" => "№2 жатақхана", "number" => "312", "floor" => 3, "capacity" => 4, "free" => 0, "price" => 18000,
+     "description" => "Төрт орындық бөлме"],
+    ["id" => 4, "dorm" => "№2 жатақхана", "number" => "118", "floor" => 1, "capacity" => 2, "free" => 2, "price" => 27000,
+     "description" => "Екі орындық, жөндеуден кейін"],
+    ["id" => 5, "dorm" => "№3 жатақхана", "number" => "407", "floor" => 4, "capacity" => 3, "free" => 1, "price" => 21000,
+     "description" => "Үш орындық бөлме, оқу үстелдері бар"],
+    ["id" => 6, "dorm" => "№3 жатақхана", "number" => "220", "floor" => 2, "capacity" => 4, "free" => 3, "price" => 17000,
+     "description" => "Төрт орындық бөлме"]
+];
 
-<header class="header">
-    <a href="index.php" class="logo">Dorm<span>Book</span></a>
+$message = "";
+$messageType = "error";
 
-    <button class="burger" id="burger" aria-label="Мәзірді ашу">☰</button>
+// Күннің дұрыс форматта (ЖЖЖЖ-АА-КК) екенін тексеру
+function isValidDate($date) {
+    $d = DateTime::createFromFormat("Y-m-d", $date);
+    return $d && $d->format("Y-m-d") === $date;
+}
 
-    <nav id="nav">
-        <a href="index.php">Басты бет</a>
-        <a href="rooms.php" class="active">Бөлмелер</a>
-        <a href="login.php">Кіру</a>
-        <a href="login.php" class="main-btn small">Тіркелу</a>
-    </nav>
-</header>
+// ---------- 1. Брондау формасын серверде өңдеу ($_POST) ----------
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $roomId = (int) ($_POST["room_id"] ?? 0);
+    $name = trim($_POST["client_name"] ?? "");
+    $phone = trim($_POST["client_phone"] ?? "");
+    $startDate = $_POST["start_date"] ?? "";
+    $endDate = $_POST["end_date"] ?? "";
+    $today = date("Y-m-d");
 
-<main>
+    // Таңдалған бөлмені массивтен табу
+    $selectedRoom = null;
+    foreach ($rooms as $r) {
+        if ($r["id"] === $roomId) {
+            $selectedRoom = $r;
+        }
+    }
+
+    if ($name === "" || $phone === "" || $startDate === "" || $endDate === "") {
+        $message = "Барлық өрісті толтырыңыз.";
+    } elseif ($selectedRoom === null) {
+        $message = "Бөлме табылмады.";
+    } elseif ($selectedRoom["free"] <= 0) {
+        $message = "Бұл бөлмеде бос орын жоқ.";
+    } elseif (!preg_match('/^\+?7[0-9]{10}$/', $phone)) {
+        $message = "Телефон нөмірін +77001234567 форматында енгізіңіз.";
+    } elseif (!isValidDate($startDate) || !isValidDate($endDate)) {
+        $message = "Күнді дұрыс форматта енгізіңіз.";
+    } elseif ($startDate < $today) {
+        $message = "Кіру күні бүгінгі күннен ерте болмауы керек.";
+    } elseif ($endDate <= $startDate) {
+        $message = "Шығу күні кіру күнінен кейін болуы керек.";
+    } else {
+        $messageType = "success";
+        $message = "Құрметті " . $name . ", " . $selectedRoom["dorm"] . " №" . $selectedRoom["number"]
+                 . " бөлмесіне өтініміңіз қабылданды! Жақын арада " . $phone
+                 . " нөмірі арқылы хабарласамыз.";
+    }
+}
+
+// ---------- 2. Іздеу және сүзгілеу ($_GET) ----------
+$search = trim($_GET["search"] ?? "");
+$type = $_GET["type"] ?? "";
+$freeOnly = isset($_GET["free"]);
+
+$filteredRooms = [];
+
+foreach ($rooms as $room) {
+    $text = $room["dorm"] . " " . $room["number"];
+
+    $matchesText = $search === "" || mb_stripos($text, $search, 0, "UTF-8") !== false;
+    $matchesType = $type === "" || (string) $room["capacity"] === $type;
+    $matchesFree = !$freeOnly || $room["free"] > 0;
+
+    if ($matchesText && $matchesType && $matchesFree) {
+        $filteredRooms[] = $room;
+    }
+}
+
+$today = date("Y-m-d");
+
+$pageTitle = "Бөлмелер | DormBook";
+include "header.php";
+?>
+
 <section class="page-title">
     <p class="subtitle">ҚОЛЖЕТІМДІ БӨЛМЕЛЕР</p>
     <h1>Жатақхана бөлмелері</h1>
@@ -29,128 +96,108 @@
 </section>
 
 <section class="search-section">
-    <!-- Іздеу JavaScript арқылы бетте бірден жұмыс істейді (script.js) -->
-    <div class="search-box">
-        <input type="text" id="liveSearch"
-               placeholder="Жатақхана немесе бөлме нөмірі (мыс.: №2, 205)...">
+    <form method="GET" action="rooms.php" class="search-box">
+        <input type="text" name="search"
+               placeholder="Жатақхана немесе бөлме нөмірі (мыс.: №2, 205)..."
+               value="<?= htmlspecialchars($search, ENT_QUOTES, "UTF-8") ?>">
 
-        <select id="typeFilter">
+        <select name="type">
             <option value="">Барлық бөлме түрі</option>
-            <option value="2">2 орындық</option>
-            <option value="3">3 орындық</option>
-            <option value="4">4 орындық</option>
+            <?php foreach (["2", "3", "4"] as $t): ?>
+                <option value="<?= $t ?>" <?= $type === $t ? "selected" : "" ?>>
+                    <?= $t ?> орындық
+                </option>
+            <?php endforeach; ?>
         </select>
 
         <label class="checkbox">
-            <input type="checkbox" id="freeOnly">
+            <input type="checkbox" name="free" value="1" <?= $freeOnly ? "checked" : "" ?>>
             Тек бос орны барлар
         </label>
-    </div>
+
+        <button type="submit">Іздеу</button>
+
+        <?php if ($search !== "" || $type !== "" || $freeOnly): ?>
+            <a href="rooms.php" class="reset-link">Тазалау</a>
+        <?php endif; ?>
+    </form>
 </section>
 
 <section class="rooms-section">
+
+    <?php if ($message !== ""): ?>
+        <div class="message <?= $messageType ?>">
+            <?= htmlspecialchars($message, ENT_QUOTES, "UTF-8") ?>
+        </div>
+    <?php endif; ?>
+
+    <p class="result-count">Табылған бөлмелер: <b><?= count($filteredRooms) ?></b></p>
+
     <div class="rooms-grid">
-        <article class="room-card" data-search="№1 жатақхана 101" data-type="2" data-free="1">
-            <div class="room-top">
-                <span class="room-number">№101</span>
-                <span class="room-type">2 орындық</span>
-            </div>
+        <?php foreach ($filteredRooms as $room): ?>
+            <article class="room-card">
+                <div class="room-top">
+                    <span class="room-number">№<?= htmlspecialchars($room["number"]) ?></span>
+                    <span class="room-type"><?= $room["capacity"] ?> орындық</span>
+                </div>
 
-            <div class="room-info">
-                <h3>№1 жатақхана</h3>
-                <p class="room-meta">1-қабат</p>
-                <p class="room-desc">Екі орындық бөлме, жеке жуынатын бөлмесі бар</p>
-                <p class="status free">Бос орын: 1</p>
-                <p class="price">25 000 ₸ / ай</p>
-                <a href="login.php" class="book-btn">Брондау</a>
-            </div>
-        </article>
-        <article class="room-card" data-search="№1 жатақхана 205" data-type="3" data-free="2">
-            <div class="room-top">
-                <span class="room-number">№205</span>
-                <span class="room-type">3 орындық</span>
-            </div>
+                <div class="room-info">
+                    <h3><?= htmlspecialchars($room["dorm"]) ?></h3>
 
-            <div class="room-info">
-                <h3>№1 жатақхана</h3>
-                <p class="room-meta">2-қабат</p>
-                <p class="room-desc">Үш орындық бөлме, терезесі оңтүстікке қарайды</p>
-                <p class="status free">Бос орын: 2</p>
-                <p class="price">20 000 ₸ / ай</p>
-                <a href="login.php" class="book-btn">Брондау</a>
-            </div>
-        </article>
-        <article class="room-card" data-search="№2 жатақхана 312" data-type="4" data-free="0">
-            <div class="room-top">
-                <span class="room-number">№312</span>
-                <span class="room-type">4 орындық</span>
-            </div>
+                    <p class="room-meta"><?= $room["floor"] ?>-қабат</p>
+                    <p class="room-desc"><?= htmlspecialchars($room["description"]) ?></p>
 
-            <div class="room-info">
-                <h3>№2 жатақхана</h3>
-                <p class="room-meta">3-қабат</p>
-                <p class="room-desc">Төрт орындық бөлме</p>
-                <p class="status busy">Бос орын жоқ</p>
-                <p class="price">18 000 ₸ / ай</p>
-                <button class="book-btn" disabled>Брондау мүмкін емес</button>
-            </div>
-        </article>
-        <article class="room-card" data-search="№2 жатақхана 118" data-type="2" data-free="2">
-            <div class="room-top">
-                <span class="room-number">№118</span>
-                <span class="room-type">2 орындық</span>
-            </div>
+                    <?php if ($room["free"] > 0): ?>
+                        <p class="status free">Бос орын: <?= $room["free"] ?></p>
+                    <?php else: ?>
+                        <p class="status busy">Бос орын жоқ</p>
+                    <?php endif; ?>
 
-            <div class="room-info">
-                <h3>№2 жатақхана</h3>
-                <p class="room-meta">1-қабат</p>
-                <p class="room-desc">Екі орындық, жөндеуден кейін</p>
-                <p class="status free">Бос орын: 2</p>
-                <p class="price">27 000 ₸ / ай</p>
-                <a href="login.php" class="book-btn">Брондау</a>
-            </div>
-        </article>
-        <article class="room-card" data-search="№3 жатақхана 407" data-type="3" data-free="1">
-            <div class="room-top">
-                <span class="room-number">№407</span>
-                <span class="room-type">3 орындық</span>
-            </div>
+                    <p class="price">
+                        <?= number_format($room["price"], 0, ".", " ") ?> ₸ / ай
+                    </p>
 
-            <div class="room-info">
-                <h3>№3 жатақхана</h3>
-                <p class="room-meta">4-қабат</p>
-                <p class="room-desc">Үш орындық бөлме, оқу үстелдері бар</p>
-                <p class="status free">Бос орын: 1</p>
-                <p class="price">21 000 ₸ / ай</p>
-                <a href="login.php" class="book-btn">Брондау</a>
-            </div>
-        </article>
-        <article class="room-card" data-search="№3 жатақхана 220" data-type="4" data-free="3">
-            <div class="room-top">
-                <span class="room-number">№220</span>
-                <span class="room-type">4 орындық</span>
-            </div>
+                    <?php if ($room["free"] <= 0): ?>
+                        <button class="book-btn" disabled>Брондау мүмкін емес</button>
+                    <?php else: ?>
+                        <form method="POST" action="rooms.php" class="booking-form">
+                            <input type="hidden" name="room_id" value="<?= $room["id"] ?>">
 
-            <div class="room-info">
-                <h3>№3 жатақхана</h3>
-                <p class="room-meta">2-қабат</p>
-                <p class="room-desc">Төрт орындық бөлме</p>
-                <p class="status free">Бос орын: 3</p>
-                <p class="price">17 000 ₸ / ай</p>
-                <a href="login.php" class="book-btn">Брондау</a>
-            </div>
-        </article>
+                            <label class="field">
+                                Аты-жөніңіз
+                                <input type="text" name="client_name" placeholder="Атыңыз" required>
+                            </label>
+
+                            <label class="field">
+                                Телефон
+                                <input type="tel" name="client_phone" placeholder="+77001234567" required>
+                            </label>
+
+                            <div class="date-row">
+                                <label>
+                                    Кіру күні
+                                    <input type="date" name="start_date" min="<?= $today ?>" required>
+                                </label>
+                                <label>
+                                    Шығу күні
+                                    <input type="date" name="end_date" min="<?= $today ?>" required>
+                                </label>
+                            </div>
+
+                            <p class="form-error" hidden></p>
+                            <button type="submit" class="book-btn">Брондау</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            </article>
+        <?php endforeach; ?>
     </div>
 
-    <p id="emptyMessage" class="empty-message" hidden>Іздеу бойынша бөлме табылмады.</p>
+    <?php if (count($filteredRooms) === 0): ?>
+        <p class="empty-message">
+            «<?= htmlspecialchars($search, ENT_QUOTES, "UTF-8") ?>» бойынша бөлме табылмады.
+        </p>
+    <?php endif; ?>
 </section>
-</main>
 
-<footer class="footer">
-    <a href="index.php" class="logo">Dorm<span>Book</span></a>
-    <p>© 2026 DormBook. Жатақхана бөлмелерін брондау жүйесі. Оқу жобасы.</p>
-</footer>
-
-<script src="script.js"></script>
-</body>
-</html>
+<?php include "footer.php"; ?>
